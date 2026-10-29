@@ -1,0 +1,5 @@
+---
+- name: Restart portfolio
+  ansible.builtin.command:
+    cmd: pm2 restart portfolio
+  become_user: "{{ deploy_user }}"

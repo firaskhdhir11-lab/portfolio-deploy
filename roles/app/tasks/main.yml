@@ -1,0 +1,47 @@
+---
+- name: Create application directory
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: '0755'
+
+- name: Clone portfolio repository
+  ansible.builtin.git:
+    repo: "{{ app_repo }}"
+    dest: "{{ app_dir }}"
+    version: "{{ app_version }}"
+    force: true
+  become_user: "{{ deploy_user }}"
+  register: git_result
+
+- name: Install npm dependencies
+  community.general.npm:
+    path: "{{ app_dir }}"
+    ci: true
+  become_user: "{{ deploy_user }}"
+  when: git_result.changed
+
+- name: Build Next.js application
+  ansible.builtin.command:
+    cmd: npm run build
+    chdir: "{{ app_dir }}"
+  become_user: "{{ deploy_user }}"
+  when: git_result.changed
+  notify: Restart portfolio
+
+- name: Check if portfolio is running in PM2
+  ansible.builtin.command:
+    cmd: pm2 describe portfolio
+  become_user: "{{ deploy_user }}"
+  register: pm2_check
+  changed_when: false
+  failed_when: false
+
+- name: Start portfolio with PM2
+  ansible.builtin.command:
+    cmd: "pm2 start npm --name portfolio -- start -- --hostname 127.0.0.1 --port {{ app_port }}"
+    chdir: "{{ app_dir }}"
+  become_user: "{{ deploy_user }}"
+  when: pm2_check.rc != 0
